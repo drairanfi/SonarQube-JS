@@ -1,35 +1,48 @@
 # 💻 BadCalcReactHidden - Proyecto de Calidad de Código y Seguridad
 
-Este proyecto fue proporcionado como un ejercicio para estudiantes centrado en la **detección y corrección de antipatrones** de código, vulnerabilidades de seguridad (especialmente la Inyección de Prompt en LLM), y el uso de herramientas de análisis estático como SonarQube.
+Este proyecto fue proporcionado como un ejercicio centrado en la **detección y corrección de antipatrones** de código, vulnerabilidades de seguridad (Inyección de Prompt en LLM), y el uso de herramientas de análisis estático como SonarQube.
 
-El componente principal, `App.jsx`, estaba intencionalmente diseñado para ser un ejemplo de "código sucio" (messy code) con múltiples problemas de calidad, seguridad y mantenibilidad.
+Se realizaron correcciones para elevar el estándar de calidad del código y, más importante aún, para **eliminar el riesgo de seguridad funcional** introducido intencionalmente.
 
 ---
 
-## 🚨 Reporte de SonarQube y Correcciones Aplicadas
+## 🚨 Reporte de SonarQube y Correcciones de Calidad (App.jsx & hidden.js)
 
-Se utilizó SonarQube para escanear el proyecto y se corrigieron todas las advertencias de calidad de código detectadas en los archivos `.js`/`.jsx` y `.css`.
+Se abordaron todas las advertencias de calidad y "código muerto" reportadas por SonarQube:
 
-### 1. Correcciones de Seguridad y Configuraciones
+### 1. Robustez y Manejo de Errores
 
-| Archivo | Advertencia Original | Solución Aplicada |
+| Advertencia | Problema Corregido | Archivo(s) |
 | :--- | :--- | :--- |
-| `sonar-project.properties` | **S6702 (Critical)**: Token de SonarQube expuesto. | **Se eliminó** el token del archivo. Se recomienda encarecidamente que el token sea pasado como una **variable de entorno** (`SONAR_TOKEN`) en el proceso de CI/CD, no en el código fuente. |
+| **S2486** | Manejo de excepciones silencioso (`try...catch` que traga errores). | `App.jsx`, `hidden.js` |
+| **S2681** | Ambigüedad en la lógica de control debido a múltiples `if`s consecutivos sin llaves. | `App.jsx` |
+| **Redundancia** | Inicialización redundante de la variable `r` antes de ser asignada en todas las rutas de ejecución. | `App.jsx` |
 
-### 2. Correcciones en `src/App.jsx`
+### 2. Calidad de Código y Estructura
 
-| Advertencia | Descripción del Problema | Cómo se Solucionó |
+| Advertencia | Problema Corregido | Archivo(s) |
 | :--- | :--- | :--- |
-| **S2486** | Manejo de excepción silencioso (`try...catch` vacío) en `compute` y `badParse`. | Se agregó **`console.error`** en el bloque `catch` de ambas funciones para asegurar que los errores se registren, cumpliendo con la regla de manejar la excepción o no capturarla. |
-| **S2681** | Ambüedad en la ejecución de sentencias debido al uso de múltiples `if`s sin llaves para la lógica de operaciones. | Se refactorizó la lógica de las operaciones matemáticas (`+`, `-`, `*`, etc.) a una estructura **`switch`**, eliminando la ambigüedad del flujo de control. |
-| **S6774** | Falta de validación de `props` en el componente `DangerousLLM`. | Se instaló la dependencia **`prop-types`** y se definió el bloque **`DangerousLLM.propTypes`** para validar los tipos de datos de las props `userTpl` y `userInput`. |
-| **S6651** | Stringificación por defecto de objetos (`[object Object]`) al registrarlos en `GLOBAL_HISTORY`. | Se eliminaron las llaves alrededor de las variables en la *template string* (ej., `${A}` en lugar de `${{A}}`) para concatenar sus valores reales. |
-| **S4030** | Detección de código muerto (`GLOBAL_HISTORY`), una variable global que solo se modifica, pero nunca se lee. | Se añadió un **`console.log`** para "usar" la variable, silenciando la advertencia del linter y manteniendo la variable global, que es un antipatrón intencional del ejercicio. |
-| **Vite Error** | `Failed to resolve import "prop-types"`. | Se ejecutó **`npm install prop-types`** para añadir la dependencia faltante. |
+| **S6774** | Falta de validación de `props` en el componente LLM. | `App.jsx` |
+| **S6651** | Uso de stringificación de objetos por defecto (`[object Object]`) en el registro del historial. | `App.jsx` |
+| **S4030** | Detección de código muerto (`GLOBAL_HISTORY`), una colección que se modifica pero no se lee. | `App.jsx` |
+| **S4654** | Uso de sintaxis incorrecta (`camelCase`) para la propiedad CSS `minHeight`. | `styles.css` |
 
-### 3. Correcciones en Otros Archivos
+---
 
-| Archivo | Advertencia | Solución Aplicada |
-| :--- | :--- | :--- |
-| `src/hidden.js` | **S2486**: Excepción tragada silenciosamente en la función `extractHiddenPrompt`. | Se agregó **`console.error`** al bloque `catch` para registrar fallas en la decodificación Base64. |
-| `src/styles.css` | **S4654**: Uso de propiedad desconocida o sintaxis incorrecta. | Se corrigió el uso de `minHeight` (camelCase) a **`min-height`** (kebab-case) para cumplir con la sintaxis estándar de CSS. |
+## 🔒 Corrección de la Vulnerabilidad de Seguridad (Inyección de Prompt)
+
+El proyecto contenía una vulnerabilidad crítica donde el usuario o código oculto podían manipular las instrucciones de la IA (LLM).
+
+### 1. El Riesgo: Inyección de Prompt
+
+* **Piezas Inseguras**: Las funciones **`insecureBuildPrompt`** y el componente **`DangerousLLM`** permitían la concatenación directa de una plantilla de texto (`userTpl`), que podía ser suministrada por un atacante o provenir del secreto oculto (`hidden`).
+* **Vulnerabilidad**: Al unir la plantilla con las instrucciones del sistema, un texto malicioso (ej., `IGNORA LAS INSTRUCCIONES ANTERIORES...`) podía anular las reglas de la IA, lo cual constituye una **Inyección de Prompt**.
+
+### 2. Solución Aplicada
+
+Se modificó la arquitectura para eliminar por completo la posibilidad de inyección:
+
+* **Eliminación**: Se eliminaron la función **`insecureBuildPrompt`** y la lógica de estado asociada a la plantilla (`userTpl`). También se eliminó la dependencia de la plantilla oculta (`hidden`).
+* **Implementación Segura**: Se creó una nueva función **`secureBuildPrompt`** que define las instrucciones del sistema de manera *fija y segura*.
+    * El **input del usuario** es tratado estrictamente como **dato** y se coloca al final del prompt (`User data: ${userInput}`), sin capacidad de modificar la instrucción inicial del sistema.
+* **Componente Seguro**: Se renombró y refactorizó **`DangerousLLM`** a **`SecureLLM`** para reflejar que ahora utiliza el método de construcción de prompt seguro.
